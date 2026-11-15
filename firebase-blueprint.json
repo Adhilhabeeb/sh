@@ -1,0 +1,132 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized competition administrator record keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the administrator.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified administrator email address.",
+          "minLength": 5,
+          "maxLength": 160
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the admin record was created."
+        }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "ReviewSubmission": {
+      "title": "ReviewSubmission",
+      "description": "College software funding competition review submission with contact details, geolocation verification, and Google Drive selfie verification metadata.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user who submitted the review.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reviewerName": {
+          "type": "string",
+          "description": "Full name of the reviewer or participant.",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Contact email address submitted in Step 1.",
+          "minLength": 5,
+          "maxLength": 160,
+          "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone number submitted in Step 1.",
+          "minLength": 7,
+          "maxLength": 20,
+          "pattern": "^\\+?[0-9\\s\\-()]{7,20}$"
+        },
+        "projectTitle": {
+          "type": "string",
+          "description": "Name of the college software project being reviewed.",
+          "minLength": 2,
+          "maxLength": 140
+        },
+        "rating": {
+          "type": "integer",
+          "description": "Review score from 1 to 5 stars."
+        },
+        "reviewNotes": {
+          "type": "string",
+          "description": "Written evaluation comments for the competition project.",
+          "minLength": 0,
+          "maxLength": 2000
+        },
+        "status": {
+          "type": "string",
+          "description": "Verification workflow state.",
+          "enum": ["location_verified", "face_verified"]
+        },
+        "location": {
+          "type": "object",
+          "description": "Geolocation coordinates and accuracy captured with explicit browser permission (latitude, longitude, accuracyMeters, capturedAtIso)."
+        },
+        "faceVerification": {
+          "type": "object",
+          "description": "Client-side selfie verification result (passed, method, livenessScore, summary, verifiedAtIso)."
+        },
+        "driveFile": {
+          "type": "object",
+          "description": "Google Drive file metadata for the uploaded selfie image (fileId, fileName, webViewLink, folderId, uploadedAtIso)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when location permission was granted and submission was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the latest update."
+        }
+      },
+      "required": [
+        "ownerUid",
+        "reviewerName",
+        "email",
+        "phone",
+        "projectTitle",
+        "rating",
+        "reviewNotes",
+        "status",
+        "location",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Competition administrators allowed to audit all review submissions."
+    },
+    "/submissions/{submissionId}": {
+      "schema": { "$ref": "#/entities/ReviewSubmission" },
+      "description": "Verified competition review submissions containing contact PII, GPS verification, and Google Drive selfie references."
+    }
+  }
+}

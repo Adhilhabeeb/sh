@@ -1,0 +1,6 @@
+{
+  "name": "ATELIER VERI — Clothing Store & Customer Reviews",
+  "description": "Contemporary apparel store with verified customer reviews, location check-in, and photo fit verification.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

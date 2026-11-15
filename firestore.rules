@@ -1,0 +1,176 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default-Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Global Hardened Primitives
+    // -------------------------------------------------------------------------
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedEmail() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
+    }
+
+    function isAdmin() {
+      return isVerifiedEmail() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'adhilhabeeb960571@gmail.com'
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // Entity Validation Helpers
+    // -------------------------------------------------------------------------
+    function isValidAdminUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'createdAt'])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 160
+        && data.email.matches('^[^ @]+@[^ @]+\\.[^ @]+$')
+        && data.createdAt is timestamp;
+    }
+
+    function isValidLocation(loc) {
+      return loc is map
+        && loc.keys().hasAll(['latitude', 'longitude', 'accuracyMeters', 'capturedAtIso'])
+        && loc.keys().hasOnly(['latitude', 'longitude', 'accuracyMeters', 'capturedAtIso'])
+        && loc.latitude is number && loc.latitude >= -90 && loc.latitude <= 90
+        && loc.longitude is number && loc.longitude >= -180 && loc.longitude <= 180
+        && loc.accuracyMeters is number && loc.accuracyMeters >= 0 && loc.accuracyMeters <= 100000
+        && loc.capturedAtIso is string && loc.capturedAtIso.size() >= 10 && loc.capturedAtIso.size() <= 40;
+    }
+
+    function isValidFaceVerification(fv) {
+      return fv is map
+        && fv.keys().hasAll(['passed', 'method', 'livenessScore', 'summary', 'verifiedAtIso'])
+        && fv.keys().hasOnly(['passed', 'method', 'livenessScore', 'summary', 'verifiedAtIso'])
+        && fv.passed is bool && fv.passed == true
+        && fv.method is string && fv.method.size() >= 2 && fv.method.size() <= 60
+        && fv.livenessScore is number && fv.livenessScore >= 0 && fv.livenessScore <= 100
+        && fv.summary is string && fv.summary.size() >= 2 && fv.summary.size() <= 300
+        && fv.verifiedAtIso is string && fv.verifiedAtIso.size() >= 10 && fv.verifiedAtIso.size() <= 40;
+    }
+
+    function isValidDriveFile(df) {
+      return df is map
+        && df.keys().hasAll(['fileId', 'fileName', 'webViewLink', 'folderId', 'uploadedAtIso'])
+        && df.keys().hasOnly(['fileId', 'fileName', 'webViewLink', 'folderId', 'uploadedAtIso'])
+        && df.fileId is string && df.fileId.size() >= 4 && df.fileId.size() <= 160
+        && df.fileName is string && df.fileName.size() >= 4 && df.fileName.size() <= 180
+        && df.webViewLink is string && df.webViewLink.size() >= 10 && df.webViewLink.size() <= 400
+        && df.webViewLink.matches('^https://.*')
+        && df.folderId is string && df.folderId.size() >= 1 && df.folderId.size() <= 160
+        && df.uploadedAtIso is string && df.uploadedAtIso.size() >= 10 && df.uploadedAtIso.size() <= 40;
+    }
+
+    function isValidSubmissionBase(data) {
+      return isValidId(data.ownerUid)
+        && data.reviewerName is string && data.reviewerName.size() >= 2 && data.reviewerName.size() <= 100
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 160
+        && data.email.matches('^[^ @]+@[^ @]+\\.[^ @]+$')
+        && data.phone is string && data.phone.size() >= 7 && data.phone.size() <= 20
+        && data.phone.matches('^\\+?[0-9 ()+-]{7,20}$')
+        && data.projectTitle is string && data.projectTitle.size() >= 2 && data.projectTitle.size() <= 140
+        && data.rating is int && data.rating >= 1 && data.rating <= 5
+        && data.reviewNotes is string && data.reviewNotes.size() <= 2000
+        && isValidLocation(data.location)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSubmissionCreate(data) {
+      return data.keys().hasAll([
+          'ownerUid', 'reviewerName', 'email', 'phone', 'projectTitle',
+          'rating', 'reviewNotes', 'status', 'location', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'reviewerName', 'email', 'phone', 'projectTitle',
+          'rating', 'reviewNotes', 'status', 'location', 'createdAt', 'updatedAt'
+        ])
+        && isValidSubmissionBase(data)
+        && data.ownerUid == request.auth.uid
+        && data.status == 'location_verified'
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function isValidSubmissionUpdate(data) {
+      return data.keys().hasAll([
+          'ownerUid', 'reviewerName', 'email', 'phone', 'projectTitle',
+          'rating', 'reviewNotes', 'status', 'location', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'reviewerName', 'email', 'phone', 'projectTitle',
+          'rating', 'reviewNotes', 'status', 'location',
+          'faceVerification', 'driveFile', 'createdAt', 'updatedAt'
+        ])
+        && isValidSubmissionBase(data)
+        && data.status in ['location_verified', 'face_verified']
+        && (!('faceVerification' in data) || isValidFaceVerification(data.faceVerification))
+        && (!('driveFile' in data) || isValidDriveFile(data.driveFile));
+    }
+
+    // -------------------------------------------------------------------------
+    // Collections
+    // -------------------------------------------------------------------------
+    match /admins/{adminUid} {
+      allow get: if isVerifiedEmail() && isValidId(adminUid) && (request.auth.uid == adminUid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isAdmin() && isValidId(adminUid) && isValidAdminUser(incoming()) && incoming().createdAt == request.time;
+      allow update: if isAdmin() && isValidId(adminUid) && isValidAdminUser(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(adminUid);
+    }
+
+    match /submissions/{submissionId} {
+      // PII Isolation: Only the submission owner or verified competition admin can read or query
+      allow get: if isVerifiedEmail() && isValidId(submissionId) && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isVerifiedEmail() && (existing().ownerUid == request.auth.uid || isAdmin());
+
+      // Step 1: Must create in 'location_verified' state with server timestamps
+      allow create: if isVerifiedEmail()
+        && isValidId(submissionId)
+        && isValidSubmissionCreate(incoming());
+
+      // Step 2: Action-based update (transition location_verified -> face_verified, or admin override)
+      allow update: if isVerifiedEmail()
+        && isValidId(submissionId)
+        && isValidSubmissionUpdate(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            existing().ownerUid == request.auth.uid
+            && existing().status == 'location_verified'
+            && incoming().status == 'face_verified'
+            && 'faceVerification' in incoming()
+            && 'driveFile' in incoming()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'faceVerification', 'driveFile', 'updatedAt'])
+          )
+          || isAdmin()
+        );
+
+      allow delete: if isVerifiedEmail() && isValidId(submissionId) && (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+  }
+}
